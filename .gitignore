@@ -31,6 +31,9 @@ migrate_working_dir/
 .pub/
 /build/
 /build_env
+/neuro_lab_ai/dist/
+/neuro_lab_ai/build/
+/neuro_lab_ai/.dart_tool
 
 # Symbolication related
 app.*.symbols
