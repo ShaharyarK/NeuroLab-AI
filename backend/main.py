@@ -16,10 +16,13 @@ from services.imaging_service import ImagingAnalysisService
 from services.test_analysis_service import TestAnalysisService
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+from services.database import get_db, init_db, Base, engine
+from services.auth_service import AuthService
+from models.user import User
 
-# Load environment variables
-load_dotenv()
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="NeuroLab AI Backend")
 
@@ -50,6 +53,9 @@ imaging_services = {
 }
 test_service = TestAnalysisService()
 
+# Initialize database
+init_db()
+
 # Models
 class Token(BaseModel):
     access_token: str
@@ -62,6 +68,19 @@ class AnalysisResult(BaseModel):
     result: str
     confidence: float
     timestamp: datetime
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    username: str
+    email: str
+    is_admin: bool
+
+    class Config:
+        orm_mode = True
 
 # Authentication functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -77,30 +96,38 @@ def create_access_token(data: dict) -> str:
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        return username
-    except JWTError:
-        raise credentials_exception
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    return AuthService.verify_token(token, db)
 
 # Routes
-@app.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # TODO: Implement proper user authentication
-    # For now, using a simple hardcoded check
-    if form_data.username == "admin" and form_data.password == "admin":
-        access_token = create_access_token(data={"sub": form_data.username})
-        return {"access_token": access_token, "token_type": "bearer"}
-    raise HTTPException(status_code=401, detail="Incorrect username or password")
+@app.post("/register", response_model=UserResponse)
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = AuthService.create_user(
+        username=user.username,
+        email=user.email,
+        password=user.password,
+        db=db
+    )
+    return db_user
+
+@app.post("/token", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = AuthService.authenticate_user(form_data.username, form_data.password, db)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/users/me", response_model=UserResponse)
+def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
 
 @app.post("/analyze/xray")
 async def analyze_xray(

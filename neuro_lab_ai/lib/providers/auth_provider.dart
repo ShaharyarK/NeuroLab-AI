@@ -1,51 +1,99 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AuthProvider with ChangeNotifier {
   final _storage = const FlutterSecureStorage();
+  final _dio = Dio();
   bool _isAuthenticated = false;
   String? _token;
+  String? _username;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get token => _token;
+  String? get username => _username;
+
+  AuthProvider() {
+    _init();
+    // Configure Dio
+    _dio.options.baseUrl = 'http://localhost:511';
+    _dio.options.connectTimeout = const Duration(seconds: 5);
+    _dio.options.receiveTimeout = const Duration(seconds: 3);
+  }
+
+  Future<void> _init() async {
+    _token = await _storage.read(key: 'token');
+    _username = await _storage.read(key: 'username');
+    _isAuthenticated = _token != null;
+    notifyListeners();
+  }
+
+  Future<bool> register({
+    required String username,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/register',
+        data: {
+          'username': username,
+          'email': email,
+          'password': password,
+        },
+      );
+
+      if (response.statusCode == 201) {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Registration error: $e');
+      return false;
+    }
+  }
 
   Future<bool> login(String username, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse('http://localhost:8000/token'),
-        body: {
+      final response = await _dio.post(
+        '/token',
+        data: {
           'username': username,
           'password': password,
         },
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        _token = data['access_token'];
-        await _storage.write(key: 'token', value: _token);
+        _token = response.data['access_token'];
+        _username = username;
         _isAuthenticated = true;
+
+        await _storage.write(key: 'token', value: _token);
+        await _storage.write(key: 'username', value: _username);
+
         notifyListeners();
         return true;
       }
       return false;
     } catch (e) {
-      print('Login error: $e');
+      debugPrint('Login error: $e');
       return false;
     }
   }
 
   Future<void> logout() async {
-    await _storage.delete(key: 'token');
     _token = null;
+    _username = null;
     _isAuthenticated = false;
+
+    await _storage.delete(key: 'token');
+    await _storage.delete(key: 'username');
+
     notifyListeners();
   }
 
-  Future<void> checkAuthStatus() async {
-    _token = await _storage.read(key: 'token');
-    _isAuthenticated = _token != null;
-    notifyListeners();
+  String? getAuthHeader() {
+    return _token != null ? 'Bearer $_token' : null;
   }
 }

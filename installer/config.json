@@ -1,0 +1,25 @@
+{
+    "app_name": "NeuroLabAI",
+    "version": "1.0.0",
+    "backend": {
+        "host": "localhost",
+        "port": 511,
+        "debug": false
+    },
+    "frontend": {
+        "url": "http://localhost:511",
+        "theme": "light"
+    },
+    "database": {
+        "path": "data/neuro_lab.db",
+        "backup_path": "data/backups"
+    },
+    "models": {
+        "path": "models",
+        "auto_update": false
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/neurolabai.log"
+    }
+} 

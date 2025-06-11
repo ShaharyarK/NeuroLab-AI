@@ -1,0 +1,16 @@
+# Windows-specific dependencies
+pywin32==306; platform_system == "Windows"
+winshell==0.6; platform_system == "Windows"
+
+# Code Protection
+pyarmor==7.7.4
+cryptography==41.0.5
+
+# Build Dependencies
+pyinstaller>=6.3.0
+setuptools>=69.0.3
+wheel>=0.42.0
+
+# Common dependencies
+tqdm>=4.66.1
+requests>=2.31.0
