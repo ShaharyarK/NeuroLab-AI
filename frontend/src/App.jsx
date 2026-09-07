@@ -62,7 +62,7 @@ export default function App() {
     }
     return {
       provider: 'huggingface',
-      hfToken: process.env.REACT_APP_HF_TOKEN || '',
+      hfToken: import.meta.env?.VITE_HF_TOKEN || '',
       modelName: 'Qwen/Qwen2.5-72B-Instruct',
       ollamaUrl: 'http://localhost:11434',
       temperature: 0.2,
