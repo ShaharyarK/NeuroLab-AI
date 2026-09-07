@@ -1,5 +1,5 @@
 name: neuro_lab_ai
-description: AI-powered laboratory analysis platform
+description: Self-contained offline diagnostic software for local labs using AI models to analyze lab test results and medical scans (X-ray, MRI, CT), producing printable PDF reports without internet access.
 publish_to: 'none'
 version: 1.0.0+1
 

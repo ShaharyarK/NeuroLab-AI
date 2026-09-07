@@ -11,6 +11,11 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+    full_name = Column(String, nullable=True, default="Dr. A. Chen, MD")
+    license_number = Column(String, nullable=True, default="MD-89210")
+    specialty = Column(String, nullable=True, default="Neuro-Radiology & Oncology")
+    hospital_affiliation = Column(String, nullable=True, default="St. Jude Neuro-Diagnostics Center")
+    role = Column(String, default="lead_physician")  # lead_physician, consultant, radiologist, pathologist
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
 
@@ -19,4 +24,18 @@ class User(Base):
         return pwd_context.hash(password)
 
     def verify_password(self, plain_password: str) -> bool:
-        return pwd_context.verify(plain_password, self.hashed_password) 
+        return pwd_context.verify(plain_password, self.hashed_password)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "full_name": self.full_name or self.username,
+            "license_number": self.license_number or "MD-REG",
+            "specialty": self.specialty or "General Medicine",
+            "hospital_affiliation": self.hospital_affiliation or "NeuroLab Medical Center",
+            "role": self.role or "lead_physician",
+            "is_active": self.is_active,
+            "is_admin": self.is_admin
+        }

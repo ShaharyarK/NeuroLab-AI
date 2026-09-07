@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:io';
 
 class AuthProvider with ChangeNotifier {
   final _storage = const FlutterSecureStorage();
@@ -9,10 +10,12 @@ class AuthProvider with ChangeNotifier {
   bool _isAuthenticated = false;
   String? _token;
   String? _username;
+  int? _timezoneOffset; // in hours
 
   bool get isAuthenticated => _isAuthenticated;
   String? get token => _token;
   String? get username => _username;
+  int? get timezoneOffset => _timezoneOffset;
 
   AuthProvider() {
     _init();
@@ -26,15 +29,47 @@ class AuthProvider with ChangeNotifier {
     _token = await _storage.read(key: 'token');
     _username = await _storage.read(key: 'username');
     _isAuthenticated = _token != null;
+
+    // Get stored timezone offset or detect current one
+    final storedOffset = await _storage.read(key: 'timezone_offset');
+    if (storedOffset != null) {
+      _timezoneOffset = int.parse(storedOffset);
+    } else {
+      _timezoneOffset = _getCurrentTimezoneOffset();
+      await _storage.write(
+          key: 'timezone_offset', value: _timezoneOffset.toString());
+    }
+
     notifyListeners();
   }
 
-  Future<bool> register({
+  int _getCurrentTimezoneOffset() {
+    final now = DateTime.now();
+    final offsetInMinutes = now.timeZoneOffset.inMinutes;
+    return offsetInMinutes ~/ 60; // Convert to hours
+  }
+
+  Future<void> updateTimezoneOffset() async {
+    _timezoneOffset = _getCurrentTimezoneOffset();
+    await _storage.write(
+        key: 'timezone_offset', value: _timezoneOffset.toString());
+    notifyListeners();
+  }
+
+  Map<String, String> getTimezoneHeaders() {
+    return {
+      'x-timezone-offset': _timezoneOffset?.toString() ?? '0',
+    };
+  }
+
+  Future<String?> register({
     required String username,
     required String email,
     required String password,
   }) async {
     try {
+      final headers = getTimezoneHeaders();
+
       final response = await _dio.post(
         '/register',
         data: {
@@ -42,26 +77,49 @@ class AuthProvider with ChangeNotifier {
           'email': email,
           'password': password,
         },
+        options: Options(
+          headers: headers,
+        ),
       );
 
-      if (response.statusCode == 201) {
-        return true;
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return null; // Success
+      } else if (response.data != null &&
+          response.data is Map &&
+          response.data['detail'] != null) {
+        return response.data['detail'].toString();
+      } else {
+        return 'Registration failed. Please try again.';
       }
-      return false;
+    } on DioError catch (e) {
+      if (e.response != null && e.response?.data != null) {
+        final data = e.response?.data;
+        if (data is Map && data['detail'] != null) {
+          return data['detail'].toString();
+        } else if (data is String) {
+          return data;
+        }
+      }
+      return 'Registration error: ${e.message}';
     } catch (e) {
-      debugPrint('Registration error: $e');
-      return false;
+      return 'Registration error: $e';
     }
   }
 
   Future<bool> login(String username, String password) async {
     try {
+      final headers = getTimezoneHeaders();
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+
       final response = await _dio.post(
         '/token',
-        data: {
+        data: FormData.fromMap({
           'username': username,
           'password': password,
-        },
+        }),
+        options: Options(
+          headers: headers,
+        ),
       );
 
       if (response.statusCode == 200) {

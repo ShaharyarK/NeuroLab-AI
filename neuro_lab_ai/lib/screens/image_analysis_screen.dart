@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +16,7 @@ class ImageAnalysisScreen extends StatefulWidget {
 
 class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
   String? _selectedImagePath;
+  Uint8List? _webImageBytes; // for web
   String _selectedModality = 'xray';
 
   Future<void> _pickImage() async {
@@ -21,12 +24,23 @@ class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
+        withData: true, // Important for web
       );
 
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedImagePath = result.files.first.path;
-        });
+        final file = result.files.first;
+
+        if (kIsWeb) {
+          setState(() {
+            _webImageBytes = file.bytes;
+            _selectedImagePath = file.name; // Just a name placeholder
+          });
+        } else {
+          setState(() {
+            _selectedImagePath = file.path;
+            _webImageBytes = null;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -41,7 +55,7 @@ class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
   }
 
   Future<void> _analyzeImage() async {
-    if (_selectedImagePath == null) {
+    if (_selectedImagePath == null || (kIsWeb && _webImageBytes == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select an image first'),
@@ -51,16 +65,25 @@ class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
       return;
     }
 
-    final success = await context.read<AnalysisProvider>().analyzeImage(
-          _selectedImagePath!,
-          _selectedModality,
-          context,
-        );
+    final provider = context.read<AnalysisProvider>();
+    final success = kIsWeb
+        ? await provider.analyzeWebImage(
+            _webImageBytes!, _selectedModality, context)
+        : await provider.analyzeImage(
+            _selectedImagePath!, _selectedModality, context);
 
     if (success && mounted) {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const ResultsScreen(),
+        ),
+      );
+    } else if (mounted) {
+      String? error = provider.error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -138,12 +161,19 @@ class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
                     if (_selectedImagePath != null) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(_selectedImagePath!),
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                        child: kIsWeb
+                            ? Image.memory(
+                                _webImageBytes!,
+                                height: 200,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              )
+                            : Image.file(
+                                File(_selectedImagePath!),
+                                height: 200,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
                       ),
                       const SizedBox(height: 16),
                     ],

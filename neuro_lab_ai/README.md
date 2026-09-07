@@ -1,6 +1,6 @@
 # NeuroLab AI
 
-An AI-powered laboratory analysis platform for medical professionals.
+Self-contained offline diagnostic software for local labs using AI models to analyze lab test results and medical scans (X-ray, MRI, CT), producing printable PDF reports without internet access.
 
 ## Features
 
